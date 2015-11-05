@@ -120,11 +120,6 @@ app.get('/video/films/:id.html', function(req, res) {
                     'folders': []
                 };
 
-                var proccess = {
-                    language: 1,
-                    translation: 1,
-                    allTranslation: 0
-                };
                 var ajaxLanguageLink = data.baseUrl + '?ajax&folder=0&r=' + Math.random();
                 FSTO.getPage(ajaxLanguageLink, function(content) {
                     console.log('get languages');
@@ -140,60 +135,69 @@ app.get('/video/films/:id.html', function(req, res) {
                             'translations': []
                         });
                     });
-
-                    // Get translations
-                    data.folders.forEach(function(folder) {
-                        ajaxLanguageLink = data.baseUrl + '?ajax&folder=' + folder.parentId + '&r=' + Math.random();
-                        FSTO.getPage(ajaxLanguageLink, function(content) {
-                            console.log('get translations');
-                            $ = cheerio.load(content);
-                            var $folders = $('.folder div a.title');
-                            $folders.each(function(id, val) {
-                                var $folder = $(val);
-                                var rel = eval('(' + $folder[0].attribs.rel + ')');
-                                folder.translations.push({
-                                    'title': $folder.text().trim(),
-                                    'name': $folder[0].attribs.name,
-                                    'parentId': rel.parent_id,
-                                    'files': []
-                                });
-                                proccess.allTranslation++;
-                            });
-
-
-                            if (proccess.language++ == data.folders.length) {
-
-                                // Get files
-                                data.folders.forEach(function(folder, id) {
-                                    folder.translations.forEach(function(translation) {
-                                        ajaxLanguageLink = data.baseUrl + '?ajax&folder=' + translation.parentId + '&r=' + Math.random();
-                                        FSTO.getPage(ajaxLanguageLink, function(content) {
-                                            console.log('get files');
-
-                                            $ = cheerio.load(content);
-                                            var $items = $('li');
-                                            $items.each(function(id, val) {
-                                                var $item = $(val),
-                                                    $quality = $item.find('span.video-qulaity'),
-                                                    $downloadLink = $item.find('a.b-file-new__link-material-download');
-                                                translation.files.push({
-                                                    'quality': $quality.text().trim(),
-                                                    'url': $downloadLink[0] ? $downloadLink[0].attribs.href : '',
-                                                });
-                                            });
-                                            if ((proccess.translation++ == proccess.allTranslation)) {
-                                                res.status(200).json(data);
-                                            }
-                                        })
-                                    });
-                                });
-                            }
+                    parseLanguages(data, data.folders.length, function(result) {
+                        parseFiles(data, result.translationsCount, function() {
+                            res.status(200).json(data);
                         });
                     });
-                })
+                });
             }
         );
     }
+
+    function parseLanguages(data, count, callback) {
+        var pageUrl, languageParsed = 1, translations = 0;
+        data.folders.forEach(function(folder) {
+            pageUrl = data.baseUrl + '?ajax&folder=' + folder.parentId + '&r=' + Math.random();
+            FSTO.getPage(pageUrl, function(content) {
+                console.log('get translations');
+                $ = cheerio.load(content);
+                var $folders = $('.folder div a.title');
+                $folders.each(function(id, val) {
+                    var $folder = $(val);
+                    var rel = eval('(' + $folder[0].attribs.rel + ')');
+                    folder.translations.push({
+                        'title': $folder.text().trim(),
+                        'name': $folder[0].attribs.name,
+                        'parentId': rel.parent_id,
+                        'files': []
+                    });
+                    translations++;
+                });
+                if (languageParsed++ == count) {
+                    callback({'translationsCount': translations});
+                }
+            });
+        });
+    };
+
+    function parseFiles(data, count, callback) {
+        var pageUrl, translationParsed = 1;
+        data.folders.forEach(function(folder, id) {
+            folder.translations.forEach(function(translation) {
+                pageUrl = data.baseUrl + '?ajax&folder=' + translation.parentId + '&r=' + Math.random();
+                FSTO.getPage(pageUrl, function(content) {
+                    console.log('get files');
+
+                    $ = cheerio.load(content);
+                    var $items = $('li');
+                    $items.each(function(id, val) {
+                        var $item = $(val),
+                            $quality = $item.find('span.video-qulaity'),
+                            $downloadLink = $item.find('a.b-file-new__link-material-download');
+                        translation.files.push({
+                            'quality': $quality.text().trim(),
+                            'url': $downloadLink[0] ? $downloadLink[0].attribs.href : '',
+                        });
+                    });
+                    if ((translationParsed++ == count)) {
+                        callback();
+                        //res.status(200).json(data);
+                    }
+                })
+            });
+        });
+    };
 });
 
 
