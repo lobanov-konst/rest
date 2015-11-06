@@ -4,7 +4,6 @@
 
 var express = require('express');
 var FSTO = require('./lib/fsto');
-var cheerio = require('cheerio');
 
 var app = express();
 app.set('json spaces', 4);
@@ -85,119 +84,18 @@ app.get('/video/films/', function(req, res) {
 
 app.get('/video/films/:id.html', function(req, res) {
 
-    var $,
-        path = '/video/films/' + req.params.id + '.html',
-        data = {
-            'nowViewed': {'list': []},
-            'films': {'list': []}
-        },
-        folder = {};
+    var $, path = '/video/films/' + req.params.id + '.html';
 
     if (Object.keys(req.query).length) {
         // Parse details
         if (req.query.folder) {
-
             console.log('parse folder');
         }
-        //console.log('with params');
     } else {
-        FSTO.getPage(path, function(content) {
-                console.log('get content');
-                $ = cheerio.load(content);
-                var $content = $('.l-tab-item-content'),
-                    $posterUrl = $content.find('.poster-main img'),
-                    $title = $content.find('.b-tab-item__title-inner span'),
-                    $titleOrigin = $content.find('.b-tab-item__title-origin'),
-                //$itemInfo = $content.find('.item-info tr'),
-                    $fileList = $content.find('#page-item-file-list a'),
-                    $itemRel = eval('(' + $fileList[0].attribs.rel + ')');
-                data = {
-                    'itemId': $itemRel.item_id,
-                    'baseUrl': $itemRel.baseurl,
-                    'imageUrl': $posterUrl[0].attribs.src,
-                    'title': $title.text().trim(),
-                    'titleOrigin': $titleOrigin.text().trim(),
-                    'folders': []
-                };
-
-                var ajaxLanguageLink = data.baseUrl + '?ajax&folder=0&r=' + Math.random();
-                FSTO.getPage(ajaxLanguageLink, function(content) {
-                    console.log('get languages');
-                    $ = cheerio.load(content);
-                    var $folders = $('.folder div a');
-                    $folders.each(function(id, val) {
-                        var $folder = $(val),
-                            rel = eval('(' + $folder[0].attribs.rel + ')');
-                        data.folders.push({
-                            'title': $folder.text().trim(),
-                            'name': $folder[0].attribs.name,
-                            'parentId': rel.parent_id,
-                            'translations': []
-                        });
-                    });
-                    parseLanguages(data, data.folders.length, function(result) {
-                        parseFiles(data, result.translationsCount, function() {
-                            res.status(200).json(data);
-                        });
-                    });
-                });
-            }
-        );
+        FSTO.parseContent(path,function(result){
+            res.status(200).json(result.data);
+        });
     }
-
-    function parseLanguages(data, count, callback) {
-        var pageUrl, languageParsed = 1, translations = 0;
-        data.folders.forEach(function(folder) {
-            pageUrl = data.baseUrl + '?ajax&folder=' + folder.parentId + '&r=' + Math.random();
-            FSTO.getPage(pageUrl, function(content) {
-                console.log('get translations');
-                $ = cheerio.load(content);
-                var $folders = $('.folder div a.title');
-                $folders.each(function(id, val) {
-                    var $folder = $(val);
-                    var rel = eval('(' + $folder[0].attribs.rel + ')');
-                    folder.translations.push({
-                        'title': $folder.text().trim(),
-                        'name': $folder[0].attribs.name,
-                        'parentId': rel.parent_id,
-                        'files': []
-                    });
-                    translations++;
-                });
-                if (languageParsed++ == count) {
-                    callback({'translationsCount': translations});
-                }
-            });
-        });
-    };
-
-    function parseFiles(data, count, callback) {
-        var pageUrl, translationParsed = 1;
-        data.folders.forEach(function(folder, id) {
-            folder.translations.forEach(function(translation) {
-                pageUrl = data.baseUrl + '?ajax&folder=' + translation.parentId + '&r=' + Math.random();
-                FSTO.getPage(pageUrl, function(content) {
-                    console.log('get files');
-
-                    $ = cheerio.load(content);
-                    var $items = $('li');
-                    $items.each(function(id, val) {
-                        var $item = $(val),
-                            $quality = $item.find('span.video-qulaity'),
-                            $downloadLink = $item.find('a.b-file-new__link-material-download');
-                        translation.files.push({
-                            'quality': $quality.text().trim(),
-                            'url': $downloadLink[0] ? $downloadLink[0].attribs.href : '',
-                        });
-                    });
-                    if ((translationParsed++ == count)) {
-                        callback();
-                        //res.status(200).json(data);
-                    }
-                })
-            });
-        });
-    };
 });
 
 
