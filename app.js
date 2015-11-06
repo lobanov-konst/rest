@@ -4,9 +4,10 @@
 
 var express = require('express');
 var FSTO = require('./lib/fsto');
+var cheerio = require('cheerio');
 
 var app = express();
-app.set('json spaces', 4);
+app.set('json spaces', 4); //For formatting json data
 app.listen(3000);
 
 app.get('/search/:text', function(req, res) {
@@ -92,9 +93,24 @@ app.get('/video/films/:id.html', function(req, res) {
             console.log('parse folder');
         }
     } else {
-        FSTO.parseContent(path,function(result){
+        FSTO.parseContent(path, function(result) {
             res.status(200).json(result.data);
         });
+    }
+});
+app.get('/api/content', function(req, res) {
+    if (req.query.path) {
+        var $;
+        if (Object.keys(req.query).length) {
+            // Parse details
+            FSTO.parseContent(req.query.path, function(result) {
+                res.status(200).json(result.data);
+            });
+
+        } else {
+        }
+    } else {
+        res.status(200).json({'error': true});
     }
 });
 
